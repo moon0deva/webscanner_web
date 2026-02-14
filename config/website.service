@@ -1,0 +1,38 @@
+# ============================================================
+# Systemd Service – Network Security Tools Platform
+# File: /etc/systemd/system/website.service
+# ============================================================
+
+[Unit]
+Description=Flask Website - Network Security Tools Platform
+After=network.target
+Wants=network-online.target
+
+[Service]
+# Run as your Linux user (change 'tintin' to your username)
+User=friday
+Group=friday
+
+# Application directory
+WorkingDirectory=/home/friday/DONTDELETE_its_a_website/website_CV/
+
+# Use the virtual environment Python
+Environment="PATH=/home/friday/DONTDELETE_its_a_website/website_CV/web/"
+
+# Start the Flask application
+ExecStart=/home/friday/DONTDELETE_its_a_website/website_CV/python3 app.py
+
+# Auto-restart on failure
+Restart=always
+RestartSec=10
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=website
+
+# Resource limits (optional – adjust for your VM size)
+# LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

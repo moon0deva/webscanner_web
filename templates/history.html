@@ -1,0 +1,337 @@
+{% extends "base.html" %}
+{% block title %}Scan History - Network Security Tools{% endblock %}
+{% block body_class %}gradient-bg{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="fw-bold mb-1">📊 Scan History</h1>
+        <p class="text-muted mb-4">View all past scans, filter results and export reports</p>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row g-3 mb-4" id="statsCards">
+    <div class="col-6 col-md-3">
+        <div class="card shadow-sm stat-card text-center">
+            <div class="card-body py-3">
+                <div class="stat-number text-primary" id="totalScans">–</div>
+                <div class="stat-label">Total Scans</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card shadow-sm stat-card text-center">
+            <div class="card-body py-3">
+                <div class="stat-number text-success" id="totalPorts">–</div>
+                <div class="stat-label">Ports Found</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card shadow-sm stat-card text-center">
+            <div class="card-body py-3">
+                <div class="stat-number text-warning" id="recentScans">–</div>
+                <div class="stat-label">Last 7 Days</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card shadow-sm stat-card text-center">
+            <div class="card-body py-3">
+                <div class="stat-number text-info" id="avgDuration">–</div>
+                <div class="stat-label">Avg Duration (s)</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label small fw-semibold">🎯 Filter by Target IP</label>
+                <input type="text" class="form-control" id="filterTarget" placeholder="e.g. 8.8.8.8">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold">⚡ Scan Type</label>
+                <select class="form-select" id="filterType">
+                    <option value="">All Types</option>
+                    <option value="quick">Quick Scan</option>
+                    <option value="full">Deep Scan</option>
+                </select>
+            </div>
+            <div class="col-md-5 d-flex gap-2">
+                <button class="btn btn-primary w-100" onclick="loadScans(1)">🔍 Filter</button>
+                <button class="btn btn-outline-secondary w-100" onclick="clearFilters()">✖ Clear</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Scan Table -->
+<div class="card shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>#</th>
+                        <th>Target IP</th>
+                        <th>Requester</th>
+                        <th>Type</th>
+                        <th>Ports</th>
+                        <th>Duration</th>
+                        <th>Timestamp</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="scansTableBody">
+                    <tr><td colspan="8" class="text-center py-4 text-muted">
+                        <div class="spinner-border spinner-border-sm me-2"></div>Loading scans...
+                    </td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Pagination -->
+<div class="d-flex justify-content-between align-items-center mt-3" id="pagination">
+    <span class="text-muted small" id="paginationInfo"></span>
+    <div id="paginationButtons" class="d-flex gap-2"></div>
+</div>
+
+<!-- Scan Detail Modal -->
+<div class="modal fade" id="scanModal" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">📋 Scan Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="scanModalBody">
+                <div class="text-center py-4"><div class="spinner-border"></div></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-success" onclick="exportJSON()">⬇️ Export JSON</button>
+                <button class="btn btn-danger"  onclick="exportPDF()">📄 Export PDF</button>
+                {% if logged_in %}
+                <button class="btn btn-outline-danger" onclick="deleteScan()">🗑️ Delete</button>
+                {% endif %}
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentPage   = 1;
+let currentScanId = null;
+
+// ── Statistics ──────────────────────────────
+async function loadStatistics() {
+    try {
+        const res  = await fetch('/api/statistics');
+        const data = await res.json();
+        document.getElementById('totalScans').textContent  = data.total_scans  ?? 0;
+        document.getElementById('totalPorts').textContent  = data.total_ports  ?? 0;
+        document.getElementById('recentScans').textContent = data.recent_scans ?? 0;
+        document.getElementById('avgDuration').textContent = data.avg_duration ?? 0;
+    } catch(e) { console.error('Stats error', e); }
+}
+
+// ── Scan list ───────────────────────────────
+async function loadScans(page = 1) {
+    currentPage = page;
+    const target   = document.getElementById('filterTarget').value;
+    const scanType = document.getElementById('filterType').value;
+    const tbody    = document.getElementById('scansTableBody');
+
+    tbody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-muted">
+        <div class="spinner-border spinner-border-sm me-2"></div>Loading...</td></tr>`;
+
+    try {
+        let url = `/api/scans?page=${page}&per_page=10`;
+        if (target)   url += `&target=${encodeURIComponent(target)}`;
+        if (scanType) url += `&scan_type=${encodeURIComponent(scanType)}`;
+
+        const res  = await fetch(url);
+        const data = await res.json();
+
+        if (!data.scans || !data.scans.length) {
+            tbody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-muted">No scans found.</td></tr>`;
+            document.getElementById('paginationInfo').textContent = '';
+            document.getElementById('paginationButtons').innerHTML = '';
+            return;
+        }
+
+        tbody.innerHTML = data.scans.map(scan => `
+            <tr style="cursor:pointer;" onclick="viewScan(${scan.id})">
+                <td><strong>#${scan.id}</strong></td>
+                <td><code>${scan.target_ip}</code></td>
+                <td><small class="text-muted">${scan.requester_ip}</small></td>
+                <td><span class="badge ${scan.scan_type === 'full' ? 'bg-danger' : 'bg-primary'}">
+                    ${scan.scan_type === 'full' ? '🔥 Deep' : '⚡ Quick'}</span></td>
+                <td><span class="badge bg-success">${scan.ports_found}</span></td>
+                <td>${scan.duration ? scan.duration.toFixed(2) + 's' : 'N/A'}</td>
+                <td><small>${new Date(scan.timestamp).toLocaleString()}</small></td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation();viewScan(${scan.id})">View</button>
+                </td>
+            </tr>`).join('');
+
+        // Pagination info
+        document.getElementById('paginationInfo').textContent =
+            `Showing page ${data.current_page} of ${data.pages} (${data.total} total scans)`;
+
+        // Pagination buttons
+        const btns = document.getElementById('paginationButtons');
+        btns.innerHTML = '';
+        if (data.current_page > 1) {
+            btns.innerHTML += `<button class="btn btn-sm btn-outline-secondary" onclick="loadScans(${data.current_page - 1})">← Prev</button>`;
+        }
+        if (data.current_page < data.pages) {
+            btns.innerHTML += `<button class="btn btn-sm btn-outline-secondary" onclick="loadScans(${data.current_page + 1})">Next →</button>`;
+        }
+    } catch(e) {
+        tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger py-4">Error loading scans: ${e.message}</td></tr>`;
+    }
+}
+
+// ── View scan detail ────────────────────────
+async function viewScan(id) {
+    currentScanId = id;
+    document.getElementById('scanModalBody').innerHTML =
+        '<div class="text-center py-4"><div class="spinner-border"></div></div>';
+    new bootstrap.Modal(document.getElementById('scanModal')).show();
+
+    try {
+        const res  = await fetch(`/api/scans/${id}`);
+        const scan = await res.json();
+
+        const protocols  = scan.results?.protocols || {};
+        const hasProtocols = Object.keys(protocols).length > 0;
+
+        let portsHtml = '';
+        if (hasProtocols) {
+            let rows = '';
+            for (const [proto, ports] of Object.entries(protocols)) {
+                for (const [port, info] of Object.entries(ports)) {
+                    rows += `<tr>
+                        <td><strong>${port}/${proto}</strong></td>
+                        <td><span class="badge bg-success">${info.state || 'unknown'}</span></td>
+                        <td>${info.name || 'unknown'}</td>
+                        <td>${info.product || ''} ${info.version || ''}</td>
+                        <td><small class="text-muted">${info.extrainfo || '–'}</small></td>
+                    </tr>`;
+                }
+            }
+            portsHtml = `
+                <h6 class="mt-3">🔓 Open Ports</h6>
+                <div class="table-responsive">
+                <table class="table table-sm table-hover">
+                    <thead class="table-dark"><tr><th>Port</th><th>State</th><th>Service</th><th>Version</th><th>Extra</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table></div>`;
+        } else {
+            portsHtml = `<div class="alert alert-warning mt-3">No open ports found.</div>`;
+        }
+
+        document.getElementById('scanModalBody').innerHTML = `
+            <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                    <table class="table table-sm table-bordered">
+                        <tr><th>Scan ID</th><td>#${scan.id}</td></tr>
+                        <tr><th>Target IP</th><td><code>${scan.target_ip}</code></td></tr>
+                        <tr><th>Requester IP</th><td>${scan.requester_ip}</td></tr>
+                        <tr><th>Scan Type</th><td>${scan.scan_type}</td></tr>
+                        <tr><th>Username</th><td>${scan.username}</td></tr>
+                    </table>
+                </div>
+                <div class="col-md-6">
+                    <table class="table table-sm table-bordered">
+                        <tr><th>Status</th><td><span class="badge bg-${scan.results?.state === 'up' ? 'success' : 'danger'}">${scan.results?.state || 'unknown'}</span></td></tr>
+                        <tr><th>Ports Found</th><td>${scan.ports_found}</td></tr>
+                        <tr><th>Duration</th><td>${scan.duration ? scan.duration.toFixed(2) + 's' : 'N/A'}</td></tr>
+                        <tr><th>Timestamp</th><td>${new Date(scan.timestamp).toLocaleString()}</td></tr>
+                        <tr><th>OS</th><td>${scan.results?.os ? scan.results.os.name + ' (' + scan.results.os.accuracy + '%)' : 'N/A'}</td></tr>
+                    </table>
+                </div>
+            </div>
+            ${portsHtml}`;
+    } catch(e) {
+        document.getElementById('scanModalBody').innerHTML =
+            `<div class="alert alert-danger">Error loading scan: ${e.message}</div>`;
+    }
+}
+
+// ── Delete scan ─────────────────────────────
+async function deleteScan() {
+    if (!currentScanId || !confirm('Delete this scan?')) return;
+    try {
+        const res = await fetch(`/api/scans/${currentScanId}`, { method: 'DELETE' });
+        if (res.ok) {
+            bootstrap.Modal.getInstance(document.getElementById('scanModal')).hide();
+            loadScans(currentPage);
+            loadStatistics();
+        } else {
+            alert('Delete failed. Make sure you are logged in.');
+        }
+    } catch(e) { alert('Error: ' + e.message); }
+}
+
+// ── Export JSON ─────────────────────────────
+async function exportJSON() {
+    if (!currentScanId) return;
+    try {
+        const res  = await fetch('/api/scans/export/json', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ scan_id: currentScanId })
+        });
+        const blob = await res.blob();
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = `scan_${currentScanId}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+    } catch(e) { alert('Export failed: ' + e.message); }
+}
+
+// ── Export PDF ──────────────────────────────
+async function exportPDF() {
+    if (!currentScanId) return;
+    try {
+        const res  = await fetch('/api/scans/export/pdf', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ scan_id: currentScanId })
+        });
+        const blob = await res.blob();
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = `scan_report_${currentScanId}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+    } catch(e) { alert('PDF export failed: ' + e.message); }
+}
+
+// ── Clear filters ───────────────────────────
+function clearFilters() {
+    document.getElementById('filterTarget').value = '';
+    document.getElementById('filterType').value   = '';
+    loadScans(1);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadStatistics();
+    loadScans(1);
+});
+</script>
+{% endblock %}

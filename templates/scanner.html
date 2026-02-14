@@ -1,0 +1,1263 @@
+{% extends "base.html" %}
+{% block title %}Network Scanner - Port Scanning{% endblock %}
+{% block body_class %}gradient-bg{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-11 mx-auto">
+
+        <!-- Header -->
+        <div class="scanner-header">
+            <div>
+                <h1>🔍 Network Vulnerability Scanner</h1>
+                <p class="lead text-muted mb-0">Professional network reconnaissance and port analysis</p>
+            </div>
+            <div id="authSection" class="auth-badge">
+                {% if not logged_in %}
+                <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#loginModal">
+                    🔒 Login for Advanced Features
+                </button>
+                {% else %}
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-success fs-6 px-3 py-2">✅ Authenticated</span>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="logout()">Logout</button>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Scan Form -->
+            <div class="col-lg-7 mb-4">
+                <div class="card shadow-sm">
+                    <div class="card-body" style="background:linear-gradient(135deg,rgba(59,130,246,.08),rgba(139,92,246,.08));border:2px solid rgba(59,130,246,.2);">
+                        <h5 class="card-title">🎯 Target Configuration</h5>
+                        <form id="scanForm">
+                            <!-- Target IP -->
+                            <div class="mb-4">
+                                <label for="targetIP" class="form-label fw-semibold">Target IP Address</label>
+                                <input type="text" class="form-control form-control-lg" id="targetIP"
+                                       placeholder="e.g., 8.8.8.8" required>
+                                <small class="text-muted">ℹ️ Only public IPv4 addresses are permitted</small>
+                            </div>
+
+                            <!-- Scan Profile -->
+                            <div class="mb-4">
+                                <label class="form-label fw-semibold">⚡ Scan Profile</label>
+
+                                <div class="scan-type-card" onclick="selectScanType('quick', event)">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="scanType" id="quickScan" value="quick" checked>
+                                        <label class="form-check-label w-100" for="quickScan">
+                                            <div class="d-flex justify-content-between align-items-start">
+                                                <div>
+                                                    <strong>⚡ Quick Scan</strong>
+                                                    <p class="text-muted small mb-0 mt-1">Common ports (22,80,443,3306…) • ~10–20 seconds</p>
+                                                </div>
+                                                <span class="badge bg-success">Recommended</span>
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="scan-type-card" onclick="selectScanType('full', event)">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="scanType" id="fullScan"
+                                               value="full" {% if not logged_in %}disabled{% endif %}>
+                                        <label class="form-check-label w-100" for="fullScan">
+                                            <div class="d-flex justify-content-between align-items-start">
+                                                <div>
+                                                    <strong>🔥 Deep Scan</strong>
+                                                    <p class="text-muted small mb-0 mt-1">All 65,535 ports • ~3–5 minutes</p>
+                                                </div>
+                                                {% if not logged_in %}
+                                                <span class="badge bg-warning text-dark">🔒 Auth Required</span>
+                                                {% else %}
+                                                <span class="badge bg-primary">Available</span>
+                                                {% endif %}
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Advanced Options -->
+                            <div class="mb-4">
+                                <label class="form-label fw-semibold">🛠️ Advanced Options</label>
+
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="versionDetection" checked>
+                                    <label class="form-check-label" for="versionDetection">
+                                        <strong>Service Version Detection</strong>
+                                        <p class="text-muted small mb-0">Identify service names and version numbers</p>
+                                    </label>
+                                </div>
+
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="osDetection"
+                                           {% if not logged_in %}disabled{% endif %}>
+                                    <label class="form-check-label" for="osDetection">
+                                        <strong>OS Detection</strong>
+                                        <p class="text-muted small mb-0">Fingerprint the target operating system
+                                        {% if not logged_in %}<span class="badge bg-warning text-dark ms-1">🔒 Auth Required</span>{% endif %}</p>
+                                    </label>
+                                </div>
+
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="aggressive"
+                                           {% if not logged_in %}disabled{% endif %}>
+                                    <label class="form-check-label" for="aggressive">
+                                        <strong>Aggressive Scan</strong>
+                                        <p class="text-muted small mb-0">OS + version + scripts + traceroute
+                                        {% if not logged_in %}<span class="badge bg-warning text-dark ms-1">🔒 Auth Required</span>{% endif %}</p>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary btn-lg w-100" id="scanBtn">
+                                <span id="scanBtnText">🚀 Launch Scan</span>
+                                <span id="scanSpinner" class="spinner-border spinner-border-sm d-none ms-2" role="status"></span>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Info Panel -->
+            <div class="col-lg-5 mb-4">
+                <div class="card shadow-sm h-100" style="background:linear-gradient(135deg,rgba(59,130,246,.08),rgba(139,92,246,.08));border:2px solid rgba(59,130,246,.2);">
+                    <div class="card-body">
+                        <h5 class="card-title">ℹ️ Scan Information</h5>
+
+                        <div class="mb-3">
+                            <h6 class="text-primary">⚡ Quick Scan</h6>
+                            <ul class="small mb-0">
+                                <li>Scans 15+ common ports</li>
+                                <li>Fast results (10–20 seconds)</li>
+                                <li>Identifies basic services</li>
+                                <li>No authentication required</li>
+                            </ul>
+                        </div>
+
+                        <div class="mb-3">
+                            <h6 class="text-primary">🔥 Deep Scan</h6>
+                            <ul class="small mb-0">
+                                <li>All 65,535 ports scanned</li>
+                                <li>Detailed service fingerprinting</li>
+                                <li>OS detection available</li>
+                                <li>Takes 3–5 minutes</li>
+                                <li>Requires authentication</li>
+                                <li>-u admin -p Secret123!</li>
+                            </ul>
+                        </div>
+
+                        <hr>
+                        <div class="alert alert-warning mb-0" style="border-left:4px solid #f90000;">
+                            <strong>⚠️ Legal Notice</strong>
+                            <p class="small mb-0 mt-1">Only scan systems you own or have explicit permission to test. Unauthorised scanning may be illegal.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════
+             Web Tools  – Security Headers · Accessibility · Tech Stack
+             ═══════════════════════════════════════════════════════ -->
+        <div class="mt-4">
+            <h5 class="mb-3">🌐 Web Analysis Tools</h5>
+
+            <!-- Shared URL input -->
+            <div class="card shadow-sm mb-3">
+                <div class="card-body" style="background:linear-gradient(135deg,rgba(59,130,246,.08),rgba(139,92,246,.08));border:2px solid rgba(59,130,246,.2);">
+                    <label for="webToolUrl" class="form-label fw-semibold">🔗 Target URL</label>
+                    <div class="input-group">
+                        <input type="url" class="form-control form-control-lg" id="webToolUrl"
+                               placeholder="https://example.com">
+                        <button class="btn btn-primary" onclick="runAllWebTools()">
+                            <span id="webToolBtnText">🚀 Analyse</span>
+                            <span id="webToolSpinner" class="spinner-border spinner-border-sm d-none ms-1"></span>
+                        </button>
+                    </div>
+                    <small class="text-muted">Runs all three tools simultaneously against the URL</small>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <ul class="nav nav-tabs" id="webToolTabs">
+                <li class="nav-item">
+                    <button class="nav-link active" data-tab="sec">🔒 Security Headers</button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" data-tab="a11y">♿ Accessibility</button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" data-tab="tech">🧱 Tech Stack</button>
+                </li>
+            </ul>
+
+            <div class="card shadow-sm" style="border-top-left-radius:0;border-top:0;">
+                <div class="card-body">
+
+                    <!-- Security Headers panel -->
+                    <div id="panel-sec">
+                        <div id="sec-placeholder" class="text-center text-muted py-4">
+                            Enter a URL above and click Analyse to check security headers.
+                        </div>
+                        <div id="sec-results" class="d-none"></div>
+                    </div>
+
+                    <!-- Accessibility panel -->
+                    <div id="panel-a11y" class="d-none">
+                        <div id="a11y-placeholder" class="text-center text-muted py-4">
+                            Enter a URL above and click Analyse to run an accessibility audit.
+                        </div>
+                        <div id="a11y-results" class="d-none"></div>
+                    </div>
+
+                    <!-- Tech Stack panel -->
+                    <div id="panel-tech" class="d-none">
+                        <div id="tech-placeholder" class="text-center text-muted py-4">
+                            Enter a URL above and click Analyse to detect the technology stack.
+                        </div>
+                        <div id="tech-results" class="d-none"></div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════
+             ADVANCED TOOLS SECTION
+             ═══════════════════════════════════════════════════════ -->
+        <div class="mt-5">
+            <h5 class="mb-1">🛡️ Advanced Security Tools</h5>
+            <p class="text-muted small mb-3">Deeper analysis tools for DNS, SSL, subdomains, HTTP, redirects, CORS, cookies, email security and CSP.</p>
+
+            <!-- Advanced Tabs Nav -->
+            <ul class="nav nav-tabs flex-wrap" id="advToolTabs">
+                <li class="nav-item"><button class="nav-link active" data-tab="dns">🌐 DNS</button></li>
+                <li class="nav-item"><button class="nav-link" data-tab="ssl">🔒 SSL/TLS</button></li>
+                <li class="nav-item"><button class="nav-link" data-tab="subdomain">🔎 Subdomains</button></li>
+                <li class="nav-item"><button class="nav-link" data-tab="http">📡 HTTP</button></li>
+                <li class="nav-item"><button class="nav-link" data-tab="redirect">↪ Redirects</button></li>
+                <li class="nav-item"><button class="nav-link" data-tab="cors">🔗 CORS</button></li>
+                <li class="nav-item"><button class="nav-link" data-tab="cookie">🍪 Cookies</button></li>
+                <li class="nav-item"><button class="nav-link" data-tab="emailsec">📧 Email</button></li>
+                <li class="nav-item"><button class="nav-link" data-tab="csp">🛡 CSP</button></li>
+            </ul>
+
+            <div class="card shadow-sm" style="border-top-left-radius:0;border-top:0;">
+                <div class="card-body">
+
+                    <!-- DNS Panel -->
+                    <div id="adv-panel-dns">
+                        <div class="input-group mb-3">
+                            <input type="text" class="form-control" id="dnsInput" placeholder="example.com">
+                            <button class="btn btn-primary" onclick="runDNS()">Lookup</button>
+                        </div>
+                        <div id="dns-output" class="text-muted small">Enter a domain name above to fetch all DNS records.</div>
+                    </div>
+
+                    <!-- SSL Panel -->
+                    <div id="adv-panel-ssl" class="d-none">
+                        <div class="input-group mb-3">
+                            <input type="text" class="form-control" id="sslInput" placeholder="example.com">
+                            <button class="btn btn-primary" onclick="runSSL()">Inspect</button>
+                        </div>
+                        <div id="ssl-output" class="text-muted small">Enter a hostname to inspect its SSL/TLS certificate.</div>
+                    </div>
+
+                    <!-- Subdomain Panel -->
+                    <div id="adv-panel-subdomain" class="d-none">
+                        <div class="alert alert-info py-2 small">🔒 Requires authentication</div>
+                        <div class="input-group mb-3">
+                            <input type="text" class="form-control" id="subdomainInput" placeholder="example.com">
+                            <button class="btn btn-primary" onclick="runSubdomain()">Enumerate</button>
+                        </div>
+                        <div id="subdomain-output" class="text-muted small">Enter a domain to enumerate subdomains (wordlist-based).</div>
+                    </div>
+
+                    <!-- HTTP Panel -->
+                    <div id="adv-panel-http" class="d-none">
+                        <div class="input-group mb-3">
+                            <input type="url" class="form-control" id="httpInput" placeholder="https://example.com">
+                            <button class="btn btn-primary" onclick="runHTTP()">Analyse</button>
+                        </div>
+                        <div id="http-output" class="text-muted small">Inspect HTTP response headers, redirects, and information leaks.</div>
+                    </div>
+
+                    <!-- Redirect Panel -->
+                    <div id="adv-panel-redirect" class="d-none">
+                        <div class="input-group mb-3">
+                            <input type="url" class="form-control" id="redirectInput" placeholder="https://example.com/login">
+                            <button class="btn btn-warning" onclick="runRedirect()">Test</button>
+                        </div>
+                        <div class="small text-muted mb-2">Tests common redirect parameters (next, url, redirect, return...) with open-redirect payloads.</div>
+                        <div id="redirect-output" class="text-muted small">Enter a URL to test for open redirect vulnerabilities.</div>
+                    </div>
+
+                    <!-- CORS Panel -->
+                    <div id="adv-panel-cors" class="d-none">
+                        <div class="input-group mb-3">
+                            <input type="url" class="form-control" id="corsInput" placeholder="https://api.example.com/data">
+                            <button class="btn btn-primary" onclick="runCORS()">Check</button>
+                        </div>
+                        <div id="cors-output" class="text-muted small">Enter an API or page URL to test CORS policy.</div>
+                    </div>
+
+                    <!-- Cookie Panel -->
+                    <div id="adv-panel-cookie" class="d-none">
+                        <div class="input-group mb-3">
+                            <input type="url" class="form-control" id="cookieInput" placeholder="https://example.com">
+                            <button class="btn btn-primary" onclick="runCookies()">Analyse</button>
+                        </div>
+                        <div id="cookie-output" class="text-muted small">Inspect cookie security flags (Secure, HttpOnly, SameSite).</div>
+                    </div>
+
+                    <!-- Email Security Panel -->
+                    <div id="adv-panel-emailsec" class="d-none">
+                        <div class="input-group mb-3">
+                            <input type="text" class="form-control" id="emailSecInput" placeholder="example.com">
+                            <button class="btn btn-primary" onclick="runEmailSec()">Check</button>
+                        </div>
+                        <div class="small text-muted mb-2">Checks SPF, DKIM, DMARC, and MTA-STS records for a domain.</div>
+                        <div id="emailsec-output" class="text-muted small">Enter a domain to check its email security posture.</div>
+                    </div>
+
+                    <!-- CSP Panel -->
+                    <div id="adv-panel-csp" class="d-none">
+                        <div class="input-group mb-3">
+                            <input type="url" class="form-control" id="cspInput" placeholder="https://example.com">
+                            <button class="btn btn-primary" onclick="runCSP()">Analyse</button>
+                        </div>
+                        <div id="csp-output" class="text-muted small">Analyse the Content-Security-Policy header for misconfigurations.</div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+
+        <!-- Results -->
+        <div id="resultsContainer" class="d-none mt-4">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">📊 Scan Results</h5>
+                    <div id="scanResults"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error -->
+        <div id="errorContainer" class="alert alert-danger d-none mt-4" role="alert"></div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<!-- Login modal below -->
+
+<div class="modal fade" id="loginModal" tabindex="-1"
+     aria-labelledby="loginModalLabel" aria-modal="true" role="dialog">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="loginModalLabel">🔒 Authentication Required</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted mb-3">Login to access deep port scans, OS detection, and aggressive scanning.</p>
+                <div class="mb-3">
+                    <label for="loginUsername" class="form-label fw-semibold">Username</label>
+                    <input type="text"
+                           class="form-control form-control-lg"
+                           id="loginUsername"
+                           name="username"
+                           autocomplete="username"
+                           placeholder="Enter username"
+                           tabindex="1">
+                </div>
+                <div class="mb-3">
+                    <label for="loginPassword" class="form-label fw-semibold">Password</label>
+                    <input type="password"
+                           class="form-control form-control-lg"
+                           id="loginPassword"
+                           name="password"
+                           autocomplete="current-password"
+                           placeholder="Enter password"
+                           tabindex="2">
+                </div>
+                <div id="loginError" class="alert alert-danger d-none"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" tabindex="4">Cancel</button>
+                <button type="button" class="btn btn-primary px-4" id="loginSubmitBtn" tabindex="3">🔑 Login</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+/* ── Modal: focus username on open, Enter key nav, button click ── */
+document.addEventListener('DOMContentLoaded', function () {
+    const loginModal = document.getElementById('loginModal');
+    if (loginModal) {
+        loginModal.addEventListener('shown.bs.modal', function () {
+            const uField = document.getElementById('loginUsername');
+            if (uField) { uField.focus(); uField.removeAttribute('disabled'); }
+        });
+    }
+
+    const uInput = document.getElementById('loginUsername');
+    const pInput = document.getElementById('loginPassword');
+    const lBtn   = document.getElementById('loginSubmitBtn');
+
+    if (uInput) uInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); if (pInput) pInput.focus(); }
+    });
+    if (pInput) pInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); login(); }
+    });
+    if (lBtn)   lBtn.addEventListener('click', login);
+});
+</script>
+
+<script>
+/* ── Scan type card selection ── */
+function selectScanType(type, e) {
+    document.getElementById(type + 'Scan').checked = true;
+    document.querySelectorAll('.scan-type-card').forEach(c => c.classList.remove('active'));
+    if (e && e.currentTarget) e.currentTarget.classList.add('active');
+}
+
+/* ── Login / Logout ── */
+async function login() {
+    const username   = document.getElementById('loginUsername').value;
+    const password   = document.getElementById('loginPassword').value;
+    const loginError = document.getElementById('loginError');
+    loginError.classList.add('d-none');
+    try {
+        const res = await fetch('/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        if (res.ok) { location.reload(); }
+        else {
+            loginError.textContent = 'Invalid username or password';
+            loginError.classList.remove('d-none');
+        }
+    } catch(e) {
+        loginError.textContent = 'Login failed: ' + e.message;
+        loginError.classList.remove('d-none');
+    }
+}
+
+async function logout() {
+    await fetch('/logout', { method: 'POST' });
+    location.reload();
+}
+
+/* ── Scan form submission ── */
+document.getElementById('scanForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const targetIP  = document.getElementById('targetIP').value.trim();
+    const scanType  = document.querySelector('input[name="scanType"]:checked').value;
+    const options   = {
+        version_detection: document.getElementById('versionDetection').checked,
+        os_detection:      document.getElementById('osDetection').checked,
+        aggressive:        document.getElementById('aggressive').checked
+    };
+
+    const scanBtn        = document.getElementById('scanBtn');
+    const scanBtnText    = document.getElementById('scanBtnText');
+    const scanSpinner    = document.getElementById('scanSpinner');
+    const resultsContainer = document.getElementById('resultsContainer');
+    const scanResults    = document.getElementById('scanResults');
+    const errorContainer = document.getElementById('errorContainer');
+
+    // UI: scanning state
+    scanBtn.disabled = true;
+    scanBtnText.textContent = '⏳ Scanning in progress...';
+    scanSpinner.classList.remove('d-none');
+    resultsContainer.classList.add('d-none');
+    errorContainer.classList.add('d-none');
+
+    try {
+        const response = await fetch('/scan', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ target: targetIP, scan_type: scanType, options })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) throw new Error(data.error || 'Scan failed');
+        if (!data.results) throw new Error('No scan results returned');
+
+        // ── Build result HTML ──────────────────────────
+        const hostState   = (data.results.state   || 'unknown').toUpperCase();
+        const hostDisplay = data.results.host      || targetIP;
+        const duration    = data.duration ? data.duration.toFixed(2) : 'N/A';
+        const scanId      = data.scan_id  || 'N/A';
+        const stateColor  = data.results.state === 'up' ? 'success' : 'danger';
+
+        let html = `
+            <div class="alert alert-success mb-3" style="background:linear-gradient(135deg,rgba(16,185,129,.1),rgba(5,150,105,.1));border-left:4px solid #10b981;">
+                <div class="row g-2">
+                    <div class="col-6 col-md-3"><strong>🎯 Target:</strong> ${hostDisplay}</div>
+                    <div class="col-6 col-md-3"><strong>📡 Status:</strong> <span class="badge bg-${stateColor}">${hostState}</span></div>
+                    <div class="col-6 col-md-3"><strong>⚡ Type:</strong> ${scanType === 'quick' ? 'Quick Scan' : 'Deep Scan'}</div>
+                    <div class="col-6 col-md-3"><strong>⏱️ Duration:</strong> ${duration}s</div>
+                </div>
+                <div class="mt-2"><small class="text-muted"><strong>Scan ID:</strong> #${scanId}</small></div>
+            </div>
+        `;
+
+        // OS Detection result
+        if (data.results.os) {
+            html += `
+                <div class="alert alert-info mb-3">
+                    <strong>💻 Operating System:</strong> ${data.results.os.name || 'Unknown'}
+                    <span class="badge bg-info ms-2">${data.results.os.accuracy || 0}% Confidence</span>
+                </div>`;
+        }
+
+        // Ports table
+        const protocols   = data.results.protocols || {};
+        const hasProtocols = Object.keys(protocols).length > 0;
+
+        if (hasProtocols) {
+            let totalPorts = 0;
+            for (const p of Object.values(protocols)) totalPorts += Object.keys(p).length;
+
+            html += `<h6 class="mt-3 mb-2">🔓 Open Ports (${totalPorts} found)</h6>`;
+            html += `
+                <div class="table-responsive">
+                <table class="table table-hover table-sm">
+                    <thead class="table-dark">
+                        <tr><th>Port</th><th>Status</th><th>Service</th><th>Version</th><th>Details</th></tr>
+                    </thead>
+                    <tbody>`;
+
+            for (const [proto, ports] of Object.entries(protocols)) {
+                for (const [port, info] of Object.entries(ports)) {
+                    const state   = info.state    || 'unknown';
+                    const name    = info.name      || 'unknown';
+                    const product = info.product   || '';
+                    const version = info.version   || '';
+                    const extra   = info.extrainfo || '–';
+                    html += `
+                        <tr>
+                            <td><strong>${port}/${proto}</strong></td>
+                            <td><span class="badge bg-success">✓ ${state}</span></td>
+                            <td><strong>${name}</strong></td>
+                            <td>${product} ${version}</td>
+                            <td><small class="text-muted">${extra}</small></td>
+                        </tr>`;
+                }
+            }
+
+            html += `</tbody></table></div>`;
+            html += `
+                <div class="alert alert-info mt-3 mb-0">
+                    ✅ <strong>Scan saved!</strong>
+                    View full details and export reports in <a href="/history" class="alert-link">Scan History</a>
+                </div>`;
+        } else {
+            if (data.results.state === 'down') {
+                html += `<div class="alert alert-danger mt-3">❌ Target appears to be down or unreachable.</div>`;
+            } else {
+                html += `<div class="alert alert-warning mt-3">⚠️ No open ports found on the scanned range. Host is up but all ports appear closed or filtered.</div>`;
+            }
+        }
+
+        scanResults.innerHTML = html;
+        resultsContainer.classList.remove('d-none');
+        resultsContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    } catch (error) {
+        errorContainer.innerHTML = `<strong>❌ Scan Error</strong><br>${error.message}`;
+        errorContainer.classList.remove('d-none');
+        errorContainer.scrollIntoView({ behavior: 'smooth' });
+    } finally {
+        scanBtn.disabled    = false;
+        scanBtnText.textContent = '🚀 Launch Scan';
+        scanSpinner.classList.add('d-none');
+    }
+});
+
+// Set first scan-type-card active on load
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelector('.scan-type-card').classList.add('active');
+});
+
+/* ═══════════════════════════════════════════════════════
+   Web Analysis Tools
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Tab switching ── */
+document.querySelectorAll('#webToolTabs .nav-link').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('#webToolTabs .nav-link').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const tab = btn.dataset.tab;
+        ['sec','a11y','tech'].forEach(t => {
+            document.getElementById('panel-' + t).classList.toggle('d-none', t !== tab);
+        });
+    });
+});
+
+/* ── Run all three tools ── */
+async function runAllWebTools() {
+    const url = document.getElementById('webToolUrl').value.trim();
+    if (!url) { alert('Please enter a URL first.'); return; }
+
+    const btn     = document.getElementById('webToolBtnText');
+    const spinner = document.getElementById('webToolSpinner');
+    btn.textContent = '⏳ Analysing…';
+    spinner.classList.remove('d-none');
+    document.getElementById('webToolBtnText').closest('button').disabled = true;
+
+    await Promise.all([
+        runSecurityHeaders(url),
+        runAccessibility(url),
+        runTechStack(url),
+    ]);
+
+    btn.textContent = '🚀 Analyse';
+    spinner.classList.add('d-none');
+    document.getElementById('webToolBtnText').closest('button').disabled = false;
+}
+
+/* ── Security Headers ── */
+async function runSecurityHeaders(url) {
+    const placeholder = document.getElementById('sec-placeholder');
+    const results     = document.getElementById('sec-results');
+    placeholder.innerHTML = '<div class="spinner-border text-primary"></div><p class="mt-2 text-muted">Checking headers…</p>';
+    placeholder.classList.remove('d-none');
+    results.classList.add('d-none');
+
+    try {
+        const r    = await fetch('/api/security-headers', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({url})});
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error);
+
+        const gradeColor = {A:'success',B:'info',C:'warning',D:'warning',F:'danger'}[data.grade] || 'secondary';
+        const missing     = data.headers.filter(h => !h.present);
+        const present     = data.headers.filter(h =>  h.present);
+
+        let html = `
+        <div class="d-flex align-items-center gap-3 mb-3 flex-wrap">
+            <span class="badge bg-${gradeColor} fs-3 px-3 py-2">Grade ${data.grade}</span>
+            <div>
+                <div class="fw-semibold">Score: ${data.score}/${data.max_score} (${data.grade_pct}%)</div>
+                <div class="text-muted small">${present.length} of ${data.headers.length} headers present</div>
+            </div>
+        </div>`;
+
+        if (missing.length) {
+            html += `<h6 class="text-danger">❌ Missing Headers (${missing.length})</h6>
+            <table class="table table-sm table-hover mb-3"><thead class="table-dark"><tr><th>Header</th><th>Severity</th><th>Purpose</th></tr></thead><tbody>`;
+            for (const h of missing) {
+                const sc = h.severity === 'high' ? 'danger' : h.severity === 'medium' ? 'warning' : 'secondary';
+                html += `<tr><td><code>${h.header}</code></td><td><span class="badge bg-${sc}">${h.severity}</span></td><td class="small text-muted">${h.desc}</td></tr>`;
+            }
+            html += `</tbody></table>`;
+        }
+
+        if (present.length) {
+            html += `<h6 class="text-success">✅ Present Headers (${present.length})</h6>
+            <table class="table table-sm table-hover"><thead class="table-dark"><tr><th>Header</th><th>Value</th></tr></thead><tbody>`;
+            for (const h of present) {
+                html += `<tr><td><code>${h.header}</code></td><td class="small text-muted text-break">${h.value || '–'}</td></tr>`;
+            }
+            html += `</tbody></table>`;
+        }
+
+        results.innerHTML = html;
+        placeholder.classList.add('d-none');
+        results.classList.remove('d-none');
+    } catch(e) {
+        placeholder.innerHTML = `<div class="alert alert-danger">❌ ${e.message}</div>`;
+    }
+}
+
+/* ── Accessibility ── */
+async function runAccessibility(url) {
+    const placeholder = document.getElementById('a11y-placeholder');
+    const results     = document.getElementById('a11y-results');
+    placeholder.innerHTML = '<div class="spinner-border text-primary"></div><p class="mt-2 text-muted">Auditing accessibility…</p>';
+    placeholder.classList.remove('d-none');
+    results.classList.add('d-none');
+
+    try {
+        const r    = await fetch('/api/accessibility', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({url})});
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error);
+
+        const scoreColor = data.score >= 80 ? 'success' : data.score >= 60 ? 'warning' : 'danger';
+        const impactIcon = {critical:'🔴', serious:'🟠', moderate:'🟡', minor:'🟢'};
+
+        let html = `
+        <div class="d-flex align-items-center gap-3 mb-3 flex-wrap">
+            <span class="badge bg-${scoreColor} fs-3 px-3 py-2">${data.score}%</span>
+            <div>
+                <div class="fw-semibold">Accessibility Score</div>
+                <div class="text-muted small">${data.issues_count} issue(s) · ${data.passes_count} check(s) passed</div>
+            </div>
+        </div>`;
+
+        if (data.issues.length) {
+            html += `<h6 class="text-danger">⚠️ Issues Found (${data.issues.length})</h6>`;
+            for (const issue of data.issues) {
+                html += `
+                <div class="alert alert-warning py-2 mb-2">
+                    <strong>${impactIcon[issue.impact] || '⚠️'} [${issue.impact.toUpperCase()}]</strong>
+                    <code class="ms-1">${issue.rule}</code> – ${issue.desc}
+                    ${issue.elements && issue.elements.length ? `<details class="mt-1"><summary class="small text-muted">Show affected element(s)</summary><pre class="mt-1 small bg-light p-2 rounded text-break">${issue.elements.map(e=>e.replace(/</g,'&lt;')).join('\n')}</pre></details>` : ''}
+                </div>`;
+            }
+        }
+
+        if (data.passes.length) {
+            html += `<h6 class="text-success mt-3">✅ Passed (${data.passes.length})</h6><ul class="list-unstyled">`;
+            for (const p of data.passes) {
+                html += `<li class="small text-muted mb-1">✔ <strong>${p.rule}</strong> – ${p.desc}</li>`;
+            }
+            html += `</ul>`;
+        }
+
+        results.innerHTML = html;
+        placeholder.classList.add('d-none');
+        results.classList.remove('d-none');
+    } catch(e) {
+        placeholder.innerHTML = `<div class="alert alert-danger">❌ ${e.message}</div>`;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════
+   ADVANCED TOOLS JS
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Advanced tab switching ── */
+function initAdvTabs() {
+    document.querySelectorAll('#advToolTabs .nav-link').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('#advToolTabs .nav-link').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            const tab = btn.dataset.tab;
+            ['dns','ssl','subdomain','http','redirect','cors','cookie','emailsec','csp'].forEach(t => {
+                const el = document.getElementById('adv-panel-' + t);
+                if (el) el.classList.toggle('d-none', t !== tab);
+            });
+        });
+    });
+}
+document.addEventListener('DOMContentLoaded', initAdvTabs);
+
+/* ── DNS Lookup ── */
+async function runDNS() {
+    const domain = document.getElementById('dnsInput').value.trim();
+    if (!domain) return;
+    const out = document.getElementById('dns-output');
+    out.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-primary"></div></div>';
+    try {
+        const r = await fetch('/api/dns-lookup', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({domain})});
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error);
+        let html = `<p class="text-muted small mb-2">Domain: <strong>${d.domain}</strong>${d.reverse_dns ? ' &middot; Reverse DNS: <code>'+d.reverse_dns+'</code>' : ''}</p><div class="row g-2">`;
+        for (const t of ['A','AAAA','MX','NS','TXT','CNAME','SOA','CAA']) {
+            const rec = d.records[t] || {};
+            const found = rec.found && rec.records && rec.records.length > 0;
+            html += `<div class="col-md-6"><div class="card border-0 bg-light"><div class="card-body py-2 px-3">
+                <div class="d-flex justify-content-between"><strong>${t}</strong>
+                <span class="badge ${found ? 'bg-success' : 'bg-secondary'}">${found ? rec.records.length + ' found' : 'None'}</span></div>`;
+            if (found) {
+                for (const r2 of rec.records) {
+                    if (typeof r2 === 'object') {
+                        if (t === 'MX') html += `<div class="small mt-1"><code>Pri ${r2.priority}: ${r2.exchange}</code></div>`;
+                        else html += `<div class="small mt-1 text-break"><code>${JSON.stringify(r2)}</code></div>`;
+                    } else {
+                        html += `<div class="small mt-1 text-break"><code>${r2}</code></div>`;
+                    }
+                }
+                if (rec.ttl) html += `<div class="small text-muted">TTL: ${rec.ttl}s</div>`;
+            }
+            html += '</div></div></div>';
+        }
+        html += '</div>';
+        out.innerHTML = html;
+    } catch(e) { out.innerHTML = `<div class="alert alert-danger">&#10060; ${e.message}</div>`; }
+}
+
+/* ── SSL Inspector ── */
+async function runSSL() {
+    const host = document.getElementById('sslInput').value.trim();
+    if (!host) return;
+    const out = document.getElementById('ssl-output');
+    out.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-primary"></div></div>';
+    try {
+        const r = await fetch('/api/ssl-inspect', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({host})});
+        const d = await r.json();
+        if (d.error && !d.subject) throw new Error(d.error);
+        const daysColor = d.days_left < 0 ? 'danger' : d.days_left < 30 ? 'warning' : 'success';
+        let html = `<div class="d-flex gap-2 flex-wrap mb-3">
+            ${d.valid ? '<span class="badge bg-success">&#10003; Valid</span>' : '<span class="badge bg-danger">&#10007; Invalid</span>'}
+            <span class="badge bg-${daysColor}">${d.days_left >= 0 ? d.days_left+' days left' : 'EXPIRED'}</span>
+            <span class="badge bg-info">${d.protocol||''}</span>
+        </div>`;
+        if (d.warnings && d.warnings.length) html += `<div class="alert alert-warning py-2">${d.warnings.map(w=>'&#9888; '+w).join('<br>')}</div>`;
+        if (d.subject) html += `<table class="table table-sm table-bordered mb-2">
+            <tr><th>Common Name</th><td>${d.subject.commonName||'&ndash;'}</td></tr>
+            <tr><th>Organisation</th><td>${d.subject.organizationName||'&ndash;'}</td></tr>
+            <tr><th>Issuer</th><td>${d.issuer ? (d.issuer.organizationName||d.issuer.commonName||'&ndash;') : '&ndash;'}</td></tr>
+            <tr><th>Valid Until</th><td>${d.not_after ? new Date(d.not_after).toLocaleDateString() : '&ndash;'}</td></tr>
+            <tr><th>Protocol</th><td>${d.protocol||'&ndash;'}</td></tr>
+            <tr><th>Key Bits</th><td>${d.key_bits||'&ndash;'}</td></tr>
+            <tr><th>Host Covered</th><td>${d.host_covered ? '&#10003; Yes' : '&#10007; No'}</td></tr>
+            </table>`;
+        if (d.sans && d.sans.length) html += `<div class="mt-1 small"><strong>SANs:</strong> ${d.sans.join(', ')}</div>`;
+        // Download certificate button
+        const hostVal = document.getElementById('sslInput').value.trim();
+        html += `<div class="mt-3">
+            <button class="btn btn-sm btn-outline-primary me-2" onclick="downloadCert('${hostVal}')">
+                &#11015; Download Certificate (.pem)
+            </button>
+            <small class="text-muted">Downloads the full certificate chain in PEM format</small>
+        </div>`;
+        out.innerHTML = html;
+    } catch(e) { out.innerHTML = `<div class="alert alert-danger">&#10060; ${e.message}</div>`; }
+}
+
+async function downloadCert(host) {
+    try {
+        const r = await fetch('/api/ssl-download', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({host})
+        });
+        if (!r.ok) {
+            const err = await r.json();
+            alert('Download failed: ' + (err.error || 'Unknown error'));
+            return;
+        }
+        const blob = await r.blob();
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href = url; a.download = host + '_cert_chain.pem';
+        document.body.appendChild(a); a.click();
+        document.body.removeChild(a); URL.revokeObjectURL(url);
+    } catch(e) { alert('Download error: ' + e.message); }
+}
+
+/* ── Subdomain Enumerator ── */
+async function runSubdomain() {
+    const domain = document.getElementById('subdomainInput').value.trim();
+    if (!domain) return;
+    const out = document.getElementById('subdomain-output');
+    out.innerHTML = `<div class="text-center py-3">
+        <div class="spinner-border text-primary"></div>
+        <p class="mt-2 text-muted small">Enumerating ${domain}... scanning ${250}+ subdomains, this may take 60s</p>
+        <div class="progress mt-2" style="height:6px;max-width:300px;margin:auto;">
+            <div class="progress-bar progress-bar-striped progress-bar-animated w-100"></div>
+        </div></div>`;
+    try {
+        const r = await fetch('/api/subdomain-enum', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({domain})});
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error);
+        if (d.count === 0) {
+            out.innerHTML = `<div class="alert alert-secondary">&#128269; No subdomains found from ${d.checked} names checked.</div>`;
+            return;
+        }
+        const online  = d.found.filter(s => s.online);
+        const offline = d.found.filter(s => !s.online);
+        let html = `
+        <div class="d-flex gap-3 align-items-center mb-3 flex-wrap">
+            <span class="badge bg-primary fs-6 px-3">${d.count} found</span>
+            <span class="badge bg-success">${d.online_count} online</span>
+            <span class="badge bg-secondary">${d.offline_count} offline/unknown</span>
+            <span class="text-muted small">from ${d.checked} names checked</span>
+        </div>
+        <ul class="nav nav-tabs mb-2" id="subTabs">
+            <li class="nav-item"><button class="nav-link active" onclick="showSubTab('online',this)">&#128994; Online (${online.length})</button></li>
+            <li class="nav-item"><button class="nav-link" onclick="showSubTab('offline',this)">&#128308; Offline/Unknown (${offline.length})</button></li>
+            <li class="nav-item"><button class="nav-link" onclick="showSubTab('all',this)">All (${d.count})</button></li>
+        </ul>`;
+
+        const makeTable = (rows) => {
+            if (!rows.length) return '<div class="text-muted small py-3 text-center">No entries in this category.</div>';
+            let t = `<div class="table-responsive"><table class="table table-sm table-hover">
+                <thead class="table-dark"><tr><th>Subdomain</th><th>IPs</th><th>Ping</th><th>HTTPS</th><th>HTTP</th></tr></thead><tbody>`;
+            for (const s of rows) {
+                const pingBadge  = s.ping ? '<span class="badge bg-success">&#10003;</span>' : '<span class="badge bg-secondary">&ndash;</span>';
+                const httpsBadge = s.https_status ? `<span class="badge ${s.https_status<400?'bg-success':'bg-warning'}">${s.https_status}</span>` : '<span class="badge bg-secondary">&ndash;</span>';
+                const httpBadge  = s.http_status  ? `<span class="badge ${s.http_status<400?'bg-info':'bg-warning'} text-dark">${s.http_status}</span>` : '<span class="badge bg-secondary">&ndash;</span>';
+                const rowClass   = s.online ? '' : 'opacity-50';
+                t += `<tr class="${rowClass}">
+                    <td><code>${s.subdomain}</code></td>
+                    <td class="small">${(s.ips||[]).join('<br>')}</td>
+                    <td>${pingBadge}</td><td>${httpsBadge}</td><td>${httpBadge}</td>
+                </tr>`;
+            }
+            t += '</tbody></table></div>';
+            return t;
+        };
+
+        html += `<div id="subTab-online">${makeTable(online)}</div>`;
+        html += `<div id="subTab-offline" class="d-none">${makeTable(offline)}</div>`;
+        html += `<div id="subTab-all" class="d-none">${makeTable(d.found)}</div>`;
+        out.innerHTML = html;
+    } catch(e) { out.innerHTML = `<div class="alert alert-danger">&#10060; ${e.message}</div>`; }
+}
+
+function showSubTab(tab, btn) {
+    ['online','offline','all'].forEach(t => {
+        const el = document.getElementById('subTab-' + t);
+        if (el) el.classList.toggle('d-none', t !== tab);
+    });
+    document.querySelectorAll('#subTabs .nav-link').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+}
+
+/* ── HTTP Analyser ── */
+async function runHTTP() {
+    const url = document.getElementById('httpInput').value.trim();
+    if (!url) return;
+    const out = document.getElementById('http-output');
+    out.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-primary"></div></div>';
+    try {
+        const r = await fetch('/api/http-analyse', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({url})});
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error);
+        const sc = d.status_code < 300 ? 'success' : d.status_code < 400 ? 'info' : d.status_code < 500 ? 'warning' : 'danger';
+        let html = `<div class="d-flex gap-2 flex-wrap mb-3">
+            <span class="badge bg-${sc} fs-6">${d.status_code} ${d.reason}</span>
+            <span class="badge bg-secondary">${d.elapsed_ms}ms</span>
+            <span class="badge bg-${d.compressed?'success':'secondary'}">${d.compressed?'Compressed':'No compression'}</span>
+            <span class="badge bg-info">${(d.content_length/1024).toFixed(1)} KB</span></div>`;
+        if (d.redirect_chain && d.redirect_chain.length) {
+            html += `<h6>Redirect Chain</h6><ol class="small">`;
+            for (const red of d.redirect_chain) html += `<li><code>${red.url}</code> &rarr; <span class="badge bg-info">${red.status}</span></li>`;
+            html += `<li class="fw-bold"><code>${d.final_url}</code> (final)</li></ol>`;
+        }
+        if (d.info_leaks && d.info_leaks.length) {
+            html += `<div class="alert alert-warning py-2 mt-2"><strong>&#9888; Info Leaks</strong><br>`;
+            for (const l of d.info_leaks) html += `<code>${l.header}: ${l.value}</code><br>`;
+            html += '</div>';
+        }
+        if (d.interesting && Object.keys(d.interesting).length) {
+            html += `<h6 class="mt-2">Notable Headers</h6><table class="table table-sm table-bordered">`;
+            for (const [k,v] of Object.entries(d.interesting)) html += `<tr><th style="width:38%">${k}</th><td class="small text-break">${v}</td></tr>`;
+            html += '</table>';
+        }
+        out.innerHTML = html;
+    } catch(e) { out.innerHTML = `<div class="alert alert-danger">&#10060; ${e.message}</div>`; }
+}
+
+/* ── Open Redirect ── */
+async function runRedirect() {
+    const url = document.getElementById('redirectInput').value.trim();
+    if (!url) return;
+    const out = document.getElementById('redirect-output');
+    out.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-primary"></div><p class="mt-2 text-muted small">Testing redirect parameters...</p></div>';
+    try {
+        const r = await fetch('/api/open-redirect', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({url})});
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error);
+        let html = `<div class="alert ${d.vulnerable?'alert-danger':'alert-success'} mb-3">
+            ${d.vulnerable ? '&#128680; <strong>VULNERABLE</strong> &ndash; Open redirect found!' : '&#10003; <strong>No open redirects detected</strong>'}
+            <span class="ms-2 text-muted small">(${d.tested} tests)</span></div>`;
+        if (d.vulns && d.vulns.length) {
+            html += `<table class="table table-sm"><thead class="table-dark"><tr><th>Param</th><th>Payload</th><th>Final URL</th></tr></thead><tbody>`;
+            for (const v of d.vulns) html += `<tr><td><code>${v.param}</code></td><td class="small"><code>${v.payload}</code></td><td class="small text-danger text-break">${v.final_url}</td></tr>`;
+            html += '</tbody></table>';
+        }
+        out.innerHTML = html;
+    } catch(e) { out.innerHTML = `<div class="alert alert-danger">&#10060; ${e.message}</div>`; }
+}
+
+/* ── CORS Checker ── */
+async function runCORS() {
+    const url = document.getElementById('corsInput').value.trim();
+    if (!url) return;
+    const out = document.getElementById('cors-output');
+    out.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-primary"></div></div>';
+    try {
+        const r = await fetch('/api/cors-check', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({url})});
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error);
+        let html = `<div class="alert ${d.vulnerable?'alert-danger':'alert-success'} mb-3">
+            ${d.vulnerable ? '&#128680; <strong>CORS Misconfiguration Found</strong>' : '&#10003; <strong>No CORS issues</strong>'}</div>`;
+        if (d.issues) for (const i of d.issues) {
+            const sc = i.severity==='critical'||i.severity==='high'?'danger':'warning';
+            html += `<div class="alert alert-${sc} py-2 mb-2"><strong>[${i.severity.toUpperCase()}]</strong> ${i.desc}<br><small class="text-muted">Origin: ${i.origin}</small></div>`;
+        }
+        html += `<table class="table table-sm table-bordered mt-2"><thead class="table-dark"><tr><th>Origin</th><th>ACAO</th><th>Credentials</th></tr></thead><tbody>`;
+        for (const res of d.results) {
+            if (res.error) { html += `<tr><td>${res.origin}</td><td colspan="2" class="text-danger">${res.error}</td></tr>`; continue; }
+            html += `<tr><td class="small">${res.origin}</td>
+            <td class="small ${res.reflected||res.wildcard?'text-danger fw-bold':''}">${res.acao||'&ndash;'}</td>
+            <td class="small ${res.acac==='true'?'text-danger':''}">${res.acac||'&ndash;'}</td></tr>`;
+        }
+        html += '</tbody></table>';
+        out.innerHTML = html;
+    } catch(e) { out.innerHTML = `<div class="alert alert-danger">&#10060; ${e.message}</div>`; }
+}
+
+/* ── Cookie Security ── */
+async function runCookies() {
+    const url = document.getElementById('cookieInput').value.trim();
+    if (!url) return;
+    const out = document.getElementById('cookie-output');
+    out.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-primary"></div></div>';
+    try {
+        const r = await fetch('/api/cookie-security', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({url})});
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error);
+        if (d.cookie_count === 0) {
+            out.innerHTML = `<div class="alert alert-warning">
+                <strong>&#127850; No cookies captured</strong><br>
+                <small>${d.note || 'This site may set cookies via JavaScript (client-side only) which cannot be captured by server-to-server requests. Try loading the page in your browser and inspecting cookies via DevTools (F12 → Application → Cookies).'}</small>
+            </div>`; return;
+        }
+        const sc = d.avg_score >= 80 ? 'success' : d.avg_score >= 50 ? 'warning' : 'danger';
+        let html = `<div class="d-flex gap-3 align-items-center mb-3 flex-wrap">
+            <span class="badge bg-${sc} fs-5 px-3">${d.avg_score}%</span>
+            <span class="text-muted small">${d.cookie_count} cookie(s) found &middot; ${d.total_issues} security issue(s)</span>
+            ${d.is_https ? '<span class="badge bg-success">HTTPS</span>' : '<span class="badge bg-danger">HTTP only</span>'}
+        </div>`;
+
+        const hashColors = {jwt:'primary',md5:'danger',sha1:'warning',sha256:'success',sha512:'success',base64:'info',base64url:'info',flask_session:'warning',unknown:'secondary',hex:'secondary'};
+
+        for (const c of d.cookies) {
+            const cs  = c.score >= 80 ? 'success' : c.score >= 50 ? 'warning' : 'danger';
+            const hc  = hashColors[c.hash_key] || 'secondary';
+            const uid = 'cookie_' + c.name.replace(/[^a-z0-9]/gi,'_') + '_' + Math.random().toString(36).slice(2,6);
+            html += `<div class="card mb-3 border-${cs}">
+                <div class="card-header py-2 bg-transparent d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div>
+                        <strong class="me-1">${c.name}</strong>
+                        ${c.is_sensitive ? '<span class="badge bg-warning text-dark">&#9888; Sensitive</span>' : ''}
+                        <span class="badge bg-${hc} ms-1">${c.hash_type}</span>
+                    </div>
+                    <span class="badge bg-${cs} fs-6">${c.score}%</span>
+                </div>
+                <div class="card-body py-2 px-3">
+                    <!-- Flags row -->
+                    <div class="d-flex gap-3 small mb-2">
+                        <span class="${c.secure?'text-success':'text-danger'}">${c.secure?'&#10003;':'&#10007;'} Secure</span>
+                        <span class="${c.httponly?'text-success':'text-danger'}">${c.httponly?'&#10003;':'&#10007;'} HttpOnly</span>
+                        <span class="${c.samesite!=='Not set'?'text-success':'text-warning'}">SameSite: ${c.samesite}</span>
+                        <span class="text-muted">Domain: ${c.domain||'(this domain)'}</span>
+                        <span class="text-muted">Path: ${c.path}</span>
+                    </div>
+                    <!-- Value -->
+                    <div class="small mb-2">
+                        <span class="text-muted">Value:</span>
+                        <code class="text-break">${c.value}</code>
+                    </div>
+                    <!-- Issues -->
+                    ${c.issues.length ? '<ul class="mb-2 small text-danger ps-3">' + c.issues.map(i=>`<li>[${i.severity.toUpperCase()}] ${i.desc}</li>`).join('') + '</ul>' : '<div class="small text-success mb-2">&#10003; No security issues</div>'}
+                    <!-- Encode/Decode panel -->
+                    <details>
+                        <summary class="small text-primary" style="cursor:pointer;">&#128272; Encode / Decode options</summary>
+                        <div class="mt-2 p-2 bg-light rounded small" id="${uid}">`;
+
+            const ed = c.encode_decode || {};
+            if (ed.decoded)  html += `<div class="mb-1"><strong>Decoded:</strong> <code class="text-break">${String(ed.decoded).replace(/</g,'&lt;').substring(0,200)}</code></div>`;
+            if (ed.header)   html += `<div class="mb-1"><strong>JWT Header:</strong> <code class="text-break">${String(ed.header).replace(/</g,'&lt;').substring(0,300)}</code></div>`;
+            if (ed.payload)  html += `<div class="mb-1"><strong>JWT Payload:</strong> <code class="text-break">${String(ed.payload).replace(/</g,'&lt;').substring(0,300)}</code></div>`;
+            if (ed.note)     html += `<div class="mb-1 text-warning"><em>${ed.note}</em></div>`;
+            if (ed.as_base64)    html += `<div class="mb-1"><strong>As Base64:</strong> <code class="text-break">${ed.as_base64.substring(0,100)}</code></div>`;
+            if (ed.as_base64url) html += `<div class="mb-1"><strong>As Base64URL:</strong> <code class="text-break">${ed.as_base64url.substring(0,100)}</code></div>`;
+            if (ed.as_hex)       html += `<div class="mb-1"><strong>As Hex:</strong> <code class="text-break">${ed.as_hex.substring(0,100)}</code></div>`;
+            if (ed.error)        html += `<div class="text-muted">${ed.error}</div>`;
+
+            html += `</div></details>
+                </div>
+            </div>`;
+        }
+        out.innerHTML = html;
+    } catch(e) { out.innerHTML = `<div class="alert alert-danger">&#10060; ${e.message}</div>`; }
+}
+
+/* ── Email Security ── */
+async function runEmailSec() {
+    const domain = document.getElementById('emailSecInput').value.trim();
+    if (!domain) return;
+    const out = document.getElementById('emailsec-output');
+    out.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-primary"></div></div>';
+    try {
+        const r = await fetch('/api/email-security', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({domain})});
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error);
+        const sc = d.score >= 80 ? 'success' : d.score >= 50 ? 'warning' : 'danger';
+
+        // Score bar
+        let html = `
+        <div class="d-flex align-items-center gap-3 mb-3 flex-wrap">
+            <div style="position:relative;width:80px;height:80px;">
+                <svg viewBox="0 0 36 36" style="width:80px;height:80px;transform:rotate(-90deg)">
+                    <circle cx="18" cy="18" r="15.9" fill="none" stroke="#e5e7eb" stroke-width="3"/>
+                    <circle cx="18" cy="18" r="15.9" fill="none"
+                        stroke="${d.score>=80?'#10b981':d.score>=50?'#f59e0b':'#ef4444'}"
+                        stroke-width="3"
+                        stroke-dasharray="${d.score} ${100-d.score}"
+                        stroke-linecap="round"/>
+                </svg>
+                <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-weight:800;font-size:1.1rem;">${d.score}</div>
+            </div>
+            <div>
+                <div class="fw-bold fs-5">Email Security Score</div>
+                <div class="text-muted">${d.domain}</div>
+                <div class="small mt-1">${d.score>=80?'&#128994; Strong protection':'&#128993; Needs improvement'}</div>
+            </div>
+        </div>
+        <div class="alert alert-info py-2 small mb-3">
+            <strong>&#128161; What does this mean?</strong> These records tell the internet which servers are allowed to send email as your domain,
+            and what to do with emails that fail verification. Missing records allow attackers to impersonate your domain in phishing emails.
+        </div>`;
+
+        const checks = [
+            {key:'spf',     label:'SPF',     icon:'&#128737;', what:'Sender Policy Framework – lists which mail servers can send email for your domain.'},
+            {key:'dmarc',   label:'DMARC',   icon:'&#128140;', what:'Domain-based Message Authentication – tells receivers what to do with emails that fail SPF/DKIM checks.'},
+            {key:'dkim',    label:'DKIM',    icon:'&#128273;', what:'DomainKeys Identified Mail – a digital signature proving emails genuinely came from your server.'},
+            {key:'mta_sts', label:'MTA-STS', icon:'&#128274;', what:'Mail Transfer Agent Strict Transport Security – requires encrypted delivery of email to your domain.'},
+        ];
+
+        for (const {key, label, icon, what} of checks) {
+            const rec = d.results[key] || {};
+            const bc  = rec.found ? 'success' : 'danger';
+            html += `<div class="card mb-3 border-${bc}">
+                <div class="card-header bg-transparent py-2 d-flex justify-content-between align-items-center">
+                    <strong>${icon} ${label}</strong>
+                    <span class="badge bg-${bc}">${rec.found ? '&#10003; Found' : '&#10007; Missing'}</span>
+                </div>
+                <div class="card-body py-2 px-3">
+                    <!-- Plain English explanation -->
+                    <div class="small text-muted mb-2">${what}</div>`;
+
+            if (rec.plain_english) {
+                html += `<div class="alert py-2 alert-${rec.found?'success':'danger'} small mb-2">${rec.plain_english}</div>`;
+            }
+            if (rec.record) {
+                html += `<div class="small mb-1"><strong>Record:</strong> <code class="text-break">${rec.record}</code></div>`;
+            }
+            if (rec.policy) {
+                const policyColor = rec.policy==='reject'?'success':rec.policy==='quarantine'?'warning':'danger';
+                html += `<div class="small mb-1">Policy: <span class="badge bg-${policyColor}">${rec.policy}</span></div>`;
+            }
+            if (rec.strict !== undefined && key === 'spf') {
+                html += `<div class="small mb-1">Enforcement: <span class="badge bg-${rec.strict?'success':'warning'}">${rec.strict?'Strict (-all)':'Soft (~all)'}</span></div>`;
+            }
+            if (rec.selectors && rec.selectors.length) {
+                html += `<div class="small mb-1">Active selectors: ${rec.selectors.map(s=>'<code>'+s.selector+'</code>').join(', ')}</div>`;
+            }
+            if (rec.rua) {
+                html += `<div class="small mb-1">Reports sent to: <code>${rec.rua}</code></div>`;
+            }
+            if (rec.warning) {
+                html += `<div class="small text-warning">&#9888; ${rec.warning}</div>`;
+            }
+            html += '</div></div>';
+        }
+        out.innerHTML = html;
+    } catch(e) { out.innerHTML = `<div class="alert alert-danger">&#10060; ${e.message}</div>`; }
+}
+
+/* ── CSP Analyser ── */
+async function runCSP() {
+    const url = document.getElementById('cspInput').value.trim();
+    if (!url) return;
+    const out = document.getElementById('csp-output');
+    out.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-primary"></div></div>';
+    try {
+        const r = await fetch('/api/csp-analyse', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({url})});
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error);
+        let html = '';
+        if (!d.csp_present) {
+            html = '<div class="alert alert-danger">&#128680; <strong>No CSP header</strong> &ndash; site unprotected against XSS.</div>';
+        } else {
+            const sc = d.score >= 80 ? 'success' : d.score >= 50 ? 'warning' : 'danger';
+            html = `<div class="d-flex gap-3 align-items-center mb-3">
+                <span class="badge bg-${sc} fs-3 px-3 py-2">${d.score}%</span>
+                <div><div class="fw-semibold">CSP Score ${d.report_only ? '<span class="badge bg-warning text-dark ms-1">Report-Only</span>' : ''}</div></div></div>`;
+            if (d.issues && d.issues.length) {
+                html += `<h6 class="text-danger">&#9888; Issues (${d.issues.length})</h6>`;
+                for (const i of d.issues) {
+                    const ic = i.severity==='critical'||i.severity==='high'?'danger':'warning';
+                    html += `<div class="alert alert-${ic} py-2 mb-1"><strong>[${i.severity.toUpperCase()}]</strong> <code>${i.directive}</code> &ndash; ${i.desc}</div>`;
+                }
+            }
+            if (d.good_parts && d.good_parts.length) { html += '<h6 class="text-success mt-2">&#10003; Good</h6><ul class="small">'; for (const g of d.good_parts) html += `<li>${g}</li>`; html += '</ul>'; }
+            if (d.missing_directives && d.missing_directives.length) html += `<h6 class="mt-2">Missing</h6><div>${d.missing_directives.map(m=>`<span class="badge bg-secondary me-1 mb-1">${m}</span>`).join('')}</div>`;
+            if (d.raw_csp) html += `<details class="mt-3"><summary class="small text-muted">Raw CSP</summary><pre class="small bg-light p-2 rounded mt-1 text-break">${d.raw_csp}</pre></details>`;
+        }
+        out.innerHTML = html;
+    } catch(e) { out.innerHTML = `<div class="alert alert-danger">&#10060; ${e.message}</div>`; }
+}
+
+
+/* ── Tech Stack ── */
+async function runTechStack(url) {
+    const placeholder = document.getElementById('tech-placeholder');
+    const results     = document.getElementById('tech-results');
+    placeholder.innerHTML = '<div class="spinner-border text-primary"></div><p class="mt-2 text-muted">Detecting tech stack…</p>';
+    placeholder.classList.remove('d-none');
+    results.classList.add('d-none');
+
+    try {
+        const r    = await fetch('/api/tech-stack', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({url})});
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error);
+
+        const catIcons = {'CMS':'📝','JS Framework':'⚛️','CSS Library':'🎨','Backend':'⚙️','Server':'🖥️','CDN/Security':'🛡️','Analytics':'📊','Payments':'💳','Other':'🔧'};
+        const byCategory = {};
+        for (const t of data.detected) {
+            (byCategory[t.category] = byCategory[t.category] || []).push(t.name);
+        }
+
+        let html = `
+        <div class="d-flex align-items-center gap-3 mb-3 flex-wrap">
+            <span class="badge bg-primary fs-3 px-3 py-2">${data.count}</span>
+            <div>
+                <div class="fw-semibold">Technologies Detected</div>
+                <div class="text-muted small">HTTP ${data.response_code}
+                ${data.server_header ? ` · Server: <code>${data.server_header}</code>` : ''}
+                ${data.x_powered_by  ? ` · Powered-By: <code>${data.x_powered_by}</code>` : ''}
+                ${data.meta_generator ? ` · Generator: <code>${data.meta_generator}</code>` : ''}</div>
+            </div>
+        </div>`;
+
+        if (data.count === 0) {
+            html += `<div class="alert alert-secondary">No known technologies detected. The site may use custom or obfuscated stack.</div>`;
+        } else {
+            html += `<div class="row g-3">`;
+            for (const [cat, techs] of Object.entries(byCategory)) {
+                html += `
+                <div class="col-md-6">
+                    <div class="card border-0 bg-light h-100">
+                        <div class="card-body py-2 px-3">
+                            <div class="fw-semibold mb-1">${catIcons[cat] || '🔧'} ${cat}</div>
+                            ${techs.map(t => `<span class="badge bg-primary me-1 mb-1">${t}</span>`).join('')}
+                        </div>
+                    </div>
+                </div>`;
+            }
+            html += `</div>`;
+        }
+
+        results.innerHTML = html;
+        placeholder.classList.add('d-none');
+        results.classList.remove('d-none');
+    } catch(e) {
+        placeholder.innerHTML = `<div class="alert alert-danger">❌ ${e.message}</div>`;
+    }
+}
+</script>
+{% endblock %}

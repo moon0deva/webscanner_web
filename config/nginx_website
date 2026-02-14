@@ -1,0 +1,74 @@
+# ============================================================
+# Nginx Configuration – Network Security Tools Platform
+# File: /etc/nginx/sites-available/website
+# ============================================================
+
+server {
+    listen 80;
+    server_name nwscan.mooo.com;
+
+    # Proxy all requests to Flask app on port 5000
+    location / {
+        proxy_pass         http://127.0.0.1:5000;
+        proxy_http_version 1.1;
+
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Timeouts (important for long scans)
+        proxy_read_timeout    600s;
+        proxy_connect_timeout 60s;
+        proxy_send_timeout    60s;
+
+        # Buffer settings
+        proxy_buffer_size   128k;
+        proxy_buffers       4 256k;
+        proxy_busy_buffers_size 256k;
+    }
+
+    # Serve static files directly (faster than Flask)
+    location /static {
+        alias /home/tintin/website/static;
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+        gzip_static on;
+    }
+
+    # Security headers
+    add_header X-Frame-Options        "SAMEORIGIN"            always;
+    add_header X-XSS-Protection       "1; mode=block"         always;
+    add_header X-Content-Type-Options "nosniff"               always;
+    add_header Referrer-Policy        "strict-origin-when-cross-origin" always;
+
+    # Hide Nginx version
+    server_tokens off;
+
+    # Logging
+    access_log /var/log/nginx/nwscan_access.log;
+    error_log  /var/log/nginx/nwscan_error.log;
+}
+
+# ============================================================
+# NOTE: After running certbot, it adds HTTPS automatically.
+# The config will look like this after certbot:
+# ============================================================
+#
+# server {
+#     listen 443 ssl;
+#     server_name nwscan.mooo.com;
+#
+#     ssl_certificate     /etc/letsencrypt/live/nwscan.mooo.com/fullchain.pem;
+#     ssl_certificate_key /etc/letsencrypt/live/nwscan.mooo.com/privkey.pem;
+#     include             /etc/letsencrypt/options-ssl-nginx.conf;
+#     ssl_dhparam         /etc/letsencrypt/ssl-dhparams.pem;
+#
+#     # ... same proxy config as above ...
+# }
+#
+# server {
+#     listen 80;
+#     server_name nwscan.mooo.com;
+#     return 301 https://$host$request_uri;  # Redirect HTTP → HTTPS
+# }
